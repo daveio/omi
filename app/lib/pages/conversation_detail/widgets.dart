@@ -187,6 +187,8 @@ class GetSummaryWidgets extends StatelessWidget {
                     controller: data.item2,
                     content: conversation.structured.title.decodeString,
                     style: Theme.of(context).textTheme.titleLarge!.copyWith(fontSize: 32, color: Colors.white),
+                    searchQuery: '',
+                    currentResultIndex: -1,
                   ),
             const SizedBox(height: 16),
             _buildInfoChips(conversation),
@@ -330,6 +332,8 @@ class GetEditTextField extends StatefulWidget {
   final TextStyle style;
   final TextEditingController? controller;
   final FocusNode? focusNode;
+  final String searchQuery;
+  final int currentResultIndex;
 
   const GetEditTextField({
     super.key,
@@ -338,6 +342,8 @@ class GetEditTextField extends StatefulWidget {
     required this.conversationId,
     required this.controller,
     required this.focusNode,
+    this.searchQuery = '',
+    this.currentResultIndex = -1,
   });
 
   @override
@@ -345,8 +351,64 @@ class GetEditTextField extends StatefulWidget {
 }
 
 class _GetEditTextFieldState extends State<GetEditTextField> {
+  List<InlineSpan> _buildHighlightedText(String text, String searchQuery, int currentResultIndex) {
+    if (searchQuery.isEmpty) {
+      return [TextSpan(text: text, style: widget.style)];
+    }
+
+    final spans = <InlineSpan>[];
+    final lowerText = text.toLowerCase();
+    final lowerQuery = searchQuery.toLowerCase();
+
+    int start = 0;
+    int matchIndex = 0;
+    final matches = RegExp(RegExp.escape(lowerQuery), caseSensitive: false).allMatches(lowerText);
+
+    for (final match in matches) {
+      final matchStart = match.start;
+      final matchEnd = match.end;
+
+      if (matchStart > start) {
+        spans.add(TextSpan(text: text.substring(start, matchStart), style: widget.style));
+      }
+
+      // Add highlighted match
+      final isCurrentResult = matchIndex == currentResultIndex;
+      spans.add(TextSpan(
+        text: text.substring(matchStart, matchEnd),
+        style: widget.style.copyWith(
+          backgroundColor:
+              isCurrentResult ? Colors.orange.withValues(alpha: 0.9) : Colors.deepPurple.withValues(alpha: 0.6),
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+      ));
+
+      start = matchEnd;
+      matchIndex++;
+    }
+
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start), style: widget.style));
+    }
+
+    return spans;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.searchQuery.isNotEmpty) {
+      return RichText(
+        text: TextSpan(
+          children: _buildHighlightedText(
+            widget.controller?.text ?? widget.content,
+            widget.searchQuery,
+            widget.currentResultIndex,
+          ),
+        ),
+      );
+    }
+
     return TextField(
       keyboardType: TextInputType.multiline,
       minLines: 1,
@@ -494,6 +556,8 @@ class AppResultDetailWidget extends StatelessWidget {
                         controller: provider.overviewController,
                         content: content,
                         style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                        searchQuery: searchQuery,
+                        currentResultIndex: currentResultIndex,
                       ),
               ),
 

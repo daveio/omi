@@ -82,7 +82,8 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
     // Count matches in transcript
     if (selectedTab == ConversationTab.transcript) {
       for (var segment in provider.conversation.transcriptSegments) {
-        final text = segment.text.toLowerCase();
+        final controller = provider.segmentControllers[segment.id];
+        final text = (controller?.text ?? segment.text).toLowerCase();
         final query = _searchQuery.toLowerCase();
         int index = 0;
         while ((index = text.indexOf(query, index)) != -1) {
@@ -92,13 +93,12 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
         }
       }
     } else if (selectedTab == ConversationTab.summary) {
-      // Count matches in app summaries
-      final summarizedApp = provider.getSummarizedApp();
-      if (summarizedApp != null && summarizedApp.content.trim().isNotEmpty) {
-        final appContent = summarizedApp.content.trim().decodeString.toLowerCase();
+      final overview = provider.conversation.structured.overview.trim();
+      if (overview.isNotEmpty) {
+        final text = overview.decodeString.toLowerCase();
         final query = _searchQuery.toLowerCase();
         int index = 0;
-        while ((index = appContent.indexOf(query, index)) != -1) {
+        while ((index = text.indexOf(query, index)) != -1) {
           _searchResultPositions.add(count);
           count++;
           index += query.length;

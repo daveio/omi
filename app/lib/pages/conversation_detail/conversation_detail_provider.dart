@@ -218,28 +218,37 @@ class ConversationDetailProvider extends ChangeNotifier with MessageNotifierMixi
 
     showUnassignedFloatingButton = true;
 
-    titleController!.text = conversation.structured.title;
+    final originalTitle = conversation.structured.title;
+    titleController!.text = originalTitle;
     titleFocusNode!.addListener(() {
-      print('titleFocusNode focus changed');
+      debugPrint('titleFocusNode focus changed');
       if (!titleFocusNode!.hasFocus) {
-        conversation.structured.title = titleController!.text;
-        updateConversationTitle(conversation.id, titleController!.text);
+        final newTitle = titleController!.text;
+        if (originalTitle != newTitle) {
+          conversation.structured.title = newTitle;
+          updateConversationTitle(conversation.id, newTitle);
+        }
       }
     });
 
     final summarizedApp = getSummarizedApp();
     if (summarizedApp != null) {
-      overviewController!.text = summarizedApp.content;
+      final originalOverview = summarizedApp.content;
+      overviewController!.text = originalOverview;
       overviewFocusNode!.addListener(() {
         if (!overviewFocusNode!.hasFocus) {
-          conversation.structured.overview = overviewController!.text;
-          updateConversationOverview(conversation.id, overviewController!.text);
+          final newOverview = overviewController!.text;
+          if (originalOverview != newOverview) {
+            conversation.structured.overview = newOverview;
+            updateConversationOverview(conversation.id, newOverview);
+          }
         }
       });
     }
 
     for (var segment in conversation.transcriptSegments) {
-      final controller = TextEditingController(text: segment.text);
+      final originalText = segment.text;
+      final controller = TextEditingController(text: originalText);
       final focusNode = FocusNode();
 
       segmentControllers[segment.id] = controller;
@@ -248,8 +257,10 @@ class ConversationDetailProvider extends ChangeNotifier with MessageNotifierMixi
       focusNode.addListener(() {
         if (!focusNode.hasFocus) {
           final updatedText = controller.text;
-          segment.text = updatedText;
-          updateSegmentText(conversation.id, segment.id, updatedText);
+          if (originalText != updatedText) {
+            segment.text = updatedText;
+            updateSegmentText(conversation.id, segment.id, updatedText);
+          }
         }
       });
     }
@@ -346,9 +357,11 @@ class ConversationDetailProvider extends ChangeNotifier with MessageNotifierMixi
     final fallback = conversation.appResults.isNotEmpty ? conversation.appResults[0] : null;
 
     if (fallback != null && conversation.structured.overview.isNotEmpty) {
-      // Clone and override content to preserve all app metadata
-      fallback.content = conversation.structured.overview;
-      return fallback;
+      return AppResponse(
+        conversation.structured.overview,
+        appId: fallback.appId,
+        id: fallback.id,
+      );
     }
 
     // If no appResults but we have overview, create synthetic response
