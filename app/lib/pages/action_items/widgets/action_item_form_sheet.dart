@@ -10,7 +10,8 @@ import 'package:omi/utils/responsive/responsive_helper.dart';
 import 'package:provider/provider.dart';
 
 class ActionItemFormSheet extends StatefulWidget {
-  final ActionItemWithMetadata? actionItem; // null for create, non-null for edit
+  final ActionItemWithMetadata?
+  actionItem; // null for create, non-null for edit
   final VoidCallback? onRefresh;
 
   const ActionItemFormSheet({super.key, this.actionItem, this.onRefresh});
@@ -69,7 +70,8 @@ class _ActionItemFormSheetState extends State<ActionItemFormSheet> {
     if (widget.isEditing) {
       // Editing existing item
       String newDescription = _textController.text.trim();
-      bool descriptionChanged = newDescription != widget.actionItem!.description;
+      bool descriptionChanged =
+          newDescription != widget.actionItem!.description;
       bool dueDateChanged = _selectedDueDate != widget.actionItem!.dueAt;
       bool completionChanged = _isCompleted != widget.actionItem!.completed;
 
@@ -208,7 +210,9 @@ class _ActionItemFormSheetState extends State<ActionItemFormSheet> {
       context: context,
       builder: (context) => DateTimePickerSheet(
         initialDateTime: _selectedDueDate,
-        minimumDate: widget.isEditing ? widget.actionItem!.createdAt : DateTime.now(),
+        minimumDate: widget.isEditing
+            ? widget.actionItem!.createdAt
+            : DateTime.now(),
       ),
     );
 
@@ -416,9 +420,13 @@ class _ActionItemFormSheetState extends State<ActionItemFormSheet> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: Text(
-                        _selectedDueDate != null ? _formatDueDateWithTime(_selectedDueDate!) : 'Add due date',
+                        _selectedDueDate != null
+                            ? _formatDueDateWithTime(_selectedDueDate!)
+                            : 'Add due date',
                         style: TextStyle(
-                          color: _selectedDueDate != null ? Colors.white : Colors.grey.shade500,
+                          color: _selectedDueDate != null
+                              ? Colors.white
+                              : Colors.grey.shade500,
                           fontSize: 16,
                           fontWeight: FontWeight.w400,
                         ),
@@ -518,8 +526,8 @@ class _DateTimePickerSheetState extends State<DateTimePickerSheet> {
         color: isSelected == true
             ? ResponsiveHelper.purplePrimary
             : isCurrentYear == true
-                ? ResponsiveHelper.purplePrimary.withValues(alpha: 0.3)
-                : Colors.transparent,
+            ? ResponsiveHelper.purplePrimary.withValues(alpha: 0.3)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(
@@ -527,8 +535,12 @@ class _DateTimePickerSheetState extends State<DateTimePickerSheet> {
           year.toString(),
           style: TextStyle(
             fontSize: 14,
-            fontWeight: isSelected == true ? FontWeight.bold : FontWeight.normal,
-            color: isDisabled == true ? ResponsiveHelper.textQuaternary : ResponsiveHelper.textPrimary,
+            fontWeight: isSelected == true
+                ? FontWeight.bold
+                : FontWeight.normal,
+            color: isDisabled == true
+                ? ResponsiveHelper.textQuaternary
+                : ResponsiveHelper.textPrimary,
           ),
         ),
       ),
@@ -542,7 +554,9 @@ class _DateTimePickerSheetState extends State<DateTimePickerSheet> {
     final minimumDate = widget.minimumDate ?? now;
 
     if (widget.initialDateTime != null) {
-      _selectedDateTime = widget.initialDateTime!.isBefore(minimumDate) ? minimumDate : widget.initialDateTime!;
+      _selectedDateTime = widget.initialDateTime!.isBefore(minimumDate)
+          ? minimumDate
+          : widget.initialDateTime!;
     } else {
       _selectedDateTime = now.isBefore(minimumDate) ? minimumDate : now;
     }
@@ -703,43 +717,59 @@ class _DateTimePickerSheetState extends State<DateTimePickerSheet> {
                                     colorScheme: const ColorScheme.dark(
                                       primary: ResponsiveHelper.purplePrimary,
                                       onPrimary: ResponsiveHelper.textPrimary,
-                                      surface: ResponsiveHelper.backgroundSecondary,
+                                      surface:
+                                          ResponsiveHelper.backgroundSecondary,
                                       onSurface: ResponsiveHelper.textPrimary,
                                     ),
                                     timePickerTheme: TimePickerThemeData(
-                                      backgroundColor: ResponsiveHelper.backgroundSecondary,
-                                      hourMinuteColor: WidgetStateColor.resolveWith(
-                                        (states) => states.contains(
-                                          WidgetState.selected,
-                                        )
-                                            ? ResponsiveHelper.purplePrimary
-                                            : ResponsiveHelper.backgroundTertiary,
-                                      ),
-                                      hourMinuteTextColor: ResponsiveHelper.textPrimary,
-                                      dialHandColor: ResponsiveHelper.purplePrimary,
-                                      dialBackgroundColor: ResponsiveHelper.backgroundTertiary,
-                                      dialTextColor: WidgetStateColor.resolveWith(
-                                        (states) => states.contains(
-                                          WidgetState.selected,
-                                        )
-                                            ? ResponsiveHelper.textPrimary
-                                            : ResponsiveHelper.textSecondary,
-                                      ),
-                                      entryModeIconColor: ResponsiveHelper.textTertiary,
-                                      dayPeriodColor: WidgetStateColor.resolveWith(
-                                        (states) => states.contains(
-                                          WidgetState.selected,
-                                        )
-                                            ? ResponsiveHelper.purplePrimary
-                                            : Colors.transparent,
-                                      ),
-                                      dayPeriodTextColor: WidgetStateColor.resolveWith(
-                                        (states) => states.contains(
-                                          WidgetState.selected,
-                                        )
-                                            ? ResponsiveHelper.textPrimary
-                                            : ResponsiveHelper.textTertiary,
-                                      ),
+                                      backgroundColor:
+                                          ResponsiveHelper.backgroundSecondary,
+                                      hourMinuteColor:
+                                          WidgetStateColor.resolveWith(
+                                            (states) =>
+                                                states.contains(
+                                                  WidgetState.selected,
+                                                )
+                                                ? ResponsiveHelper.purplePrimary
+                                                : ResponsiveHelper
+                                                      .backgroundTertiary,
+                                          ),
+                                      hourMinuteTextColor:
+                                          ResponsiveHelper.textPrimary,
+                                      dialHandColor:
+                                          ResponsiveHelper.purplePrimary,
+                                      dialBackgroundColor:
+                                          ResponsiveHelper.backgroundTertiary,
+                                      dialTextColor:
+                                          WidgetStateColor.resolveWith(
+                                            (states) =>
+                                                states.contains(
+                                                  WidgetState.selected,
+                                                )
+                                                ? ResponsiveHelper.textPrimary
+                                                : ResponsiveHelper
+                                                      .textSecondary,
+                                          ),
+                                      entryModeIconColor:
+                                          ResponsiveHelper.textTertiary,
+                                      dayPeriodColor:
+                                          WidgetStateColor.resolveWith(
+                                            (states) =>
+                                                states.contains(
+                                                  WidgetState.selected,
+                                                )
+                                                ? ResponsiveHelper.purplePrimary
+                                                : Colors.transparent,
+                                          ),
+                                      dayPeriodTextColor:
+                                          WidgetStateColor.resolveWith(
+                                            (states) =>
+                                                states.contains(
+                                                  WidgetState.selected,
+                                                )
+                                                ? ResponsiveHelper.textPrimary
+                                                : ResponsiveHelper.textTertiary,
+                                          ),
                                       dayPeriodBorderSide: const BorderSide(
                                         color: ResponsiveHelper.textTertiary,
                                       ),
