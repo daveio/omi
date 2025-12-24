@@ -378,35 +378,31 @@ class _EditableMarkdownField extends StatefulWidget {
 }
 
 class _EditableMarkdownFieldState extends State<_EditableMarkdownField> {
-  bool _isEditing = false;
+  // bool _isEditing = false;
 
   @override
   void initState() {
     super.initState();
-    widget.focusNode?.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
-    widget.focusNode?.removeListener(_onFocusChange);
     super.dispose();
-  }
-
-  void _onFocusChange() {
-    if (!mounted) return;
-    setState(() {
-      _isEditing = widget.focusNode?.hasFocus ?? false;
-    });
   }
 
   void _handleDoubleTap() {
     if (widget.controller == null) return;
-    widget.focusNode?.requestFocus();
+    
+    // Toggle edit mode via provider
+    context.read<ConversationDetailProvider>().toggleSummaryEdit();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isEditing) {
+    // Use provider state instead of local state
+    final isEditing = context.select<ConversationDetailProvider, bool>((p) => p.isEditingSummary);
+
+    if (isEditing) {
       return GetEditTextField(
         conversationId: widget.conversationId,
         focusNode: widget.focusNode,
@@ -537,7 +533,9 @@ class _GetEditTextFieldState extends State<GetEditTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isActivelyEditing = widget.focusNode?.hasFocus ?? false;
+    // Check if editing via provider
+    final isEditing = context.select<ConversationDetailProvider, bool>((p) => p.isEditingSummary);
+    final bool isActivelyEditing = isEditing || (widget.focusNode?.hasFocus ?? false);
 
     if (widget.searchQuery.isNotEmpty && !isActivelyEditing) {
       return RichText(
@@ -551,18 +549,25 @@ class _GetEditTextFieldState extends State<GetEditTextField> {
       );
     }
 
-    return TextField(
-      keyboardType: TextInputType.multiline,
-      minLines: 1,
-      maxLines: null,
-      focusNode: widget.focusNode,
-      decoration: const InputDecoration(
-        border: OutlineInputBorder(borderSide: BorderSide.none),
-        contentPadding: EdgeInsets.all(0),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onDoubleTap: () {
+        final provider = context.read<ConversationDetailProvider>();
+        provider.exitSummaryEdit();
+      },
+      child: TextField(
+        keyboardType: TextInputType.multiline,
+        minLines: 1,
+        maxLines: null,
+        focusNode: widget.focusNode,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(borderSide: BorderSide.none),
+          contentPadding: EdgeInsets.all(0),
+        ),
+        controller: widget.controller,
+        enabled: true,
+        style: widget.style,
       ),
-      controller: widget.controller,
-      enabled: true,
-      style: widget.style,
     );
   }
 }

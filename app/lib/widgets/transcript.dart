@@ -58,6 +58,47 @@ class TranscriptWidget extends StatefulWidget {
 }
 
 class _TranscriptWidgetState extends State<TranscriptWidget> {
+  // Local editing state
+  String? _editingSegmentId;
+
+  bool _isEditing(String id) => _editingSegmentId == id;
+
+  void _enterEdit(String id) {
+    setState(() {
+      _editingSegmentId = id;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final node = widget.segmentFocusNodes?[id];
+      if (node != null) {
+        node.requestFocus();
+        
+        // Attach a one-time listener to handle focus loss (tap outside)
+        void focusListener() {
+          if (!node.hasFocus) {
+            node.removeListener(focusListener);
+            if (_editingSegmentId == id) {
+              setState(() {
+                _editingSegmentId = null;
+              });
+            }
+          }
+        }
+        node.addListener(focusListener);
+      }
+    });
+  }
+
+  void _exitEdit() {
+    final id = _editingSegmentId;
+    if (id == null) return;
+
+    widget.segmentFocusNodes?[id]?.unfocus();
+    setState(() {
+      _editingSegmentId = null;
+    });
+  }
+
   // Cache for person data to avoid repeated lookups
   final Map<String?, Person?> _personCache = {};
   // Cache for decoded text to avoid repeated decoding
@@ -111,8 +152,6 @@ class _TranscriptWidgetState extends State<TranscriptWidget> {
   bool _canEdit(String id) =>
       widget.segmentControllers?.containsKey(id) == true &&
       widget.segmentFocusNodes?.containsKey(id) == true;
-
-  bool _isEditing(String id) => widget.segmentFocusNodes?[id]?.hasFocus == true;
 
   @override
   void initState() {
@@ -449,6 +488,10 @@ class _TranscriptWidgetState extends State<TranscriptWidget> {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () {
+        if (_editingSegmentId != null) {
+          _exitEdit();
+          return;
+        }
         if (widget.searchQuery.isEmpty && widget.onTapWhenSearchEmpty != null) {
           widget.onTapWhenSearchEmpty!();
         }
@@ -619,45 +662,55 @@ class _TranscriptWidgetState extends State<TranscriptWidget> {
                                 ),
                               ],
                             ),
-                            child: _isEditing(data.id)
-                                ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (widget.searchQuery.isEmpty && _canEdit(data.id))
-                                        TextField(
-                                          controller: widget.segmentControllers![data.id],
-                                          focusNode: widget.segmentFocusNodes![data.id],
-                                          style: TextStyle(
-                                            letterSpacing: 0.0,
-                                            color: isUser ? Colors.white : Colors.grey.shade100,
-                                            fontSize: 15,
-                                            height: 1.4,
-                                          ),
-                                          decoration: const InputDecoration(
-                                            border: InputBorder.none,
-                                            contentPadding: EdgeInsets.zero,
-                                            isDense: true,
-                                          ),
-                                          keyboardType: TextInputType.multiline,
-                                          minLines: 1,
-                                          maxLines: null,
-                                        ),
-                                    ],
-                                  )
-                                : SelectionArea(
-                                    child: Column(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onDoubleTap: _canEdit(data.id)
+                                  ? () {
+                                      // close search first
+                                      widget.onTapWhenSearchEmpty?.call();
+
+                                      // enter edit mode
+                                      _enterEdit(data.id);
+                                    }
+                                  : null,
+                              child: _isEditing(data.id) && widget.searchQuery.isEmpty
+                                  ? Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        // Show RichText when not editing
-                                        GestureDetector(
-                                          onDoubleTap: _canEdit(data.id) && widget.searchQuery.isEmpty
-                                              ? () {
-                                                  widget.segmentFocusNodes![data.id]?.requestFocus();
-                                                }
-                                              : null,
-                                          child: RichText(
+                                        if (widget.searchQuery.isEmpty && _canEdit(data.id))
+                                          GestureDetector(
+                                            behavior: HitTestBehavior.translucent,
+                                            onDoubleTap: () {
+                                              _exitEdit();
+                                            },
+                                            child: TextField(
+                                              controller: widget.segmentControllers![data.id],
+                                              focusNode: widget.segmentFocusNodes![data.id],
+                                              keyboardType: TextInputType.multiline,
+                                              minLines: 1,
+                                              maxLines: null,
+                                              style: TextStyle(
+                                                letterSpacing: 0.0,
+                                                color: isUser ? Colors.white : Colors.grey.shade100,
+                                                fontSize: 15,
+                                                height: 1.4,
+                                              ),
+                                              decoration: const InputDecoration(
+                                                border: InputBorder.none,
+                                                contentPadding: EdgeInsets.zero,
+                                                isDense: true,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    )
+                                  : SelectionArea(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          RichText(
                                             textAlign: TextAlign.left,
                                             text: TextSpan(
                                               style: TextStyle(
@@ -683,70 +736,74 @@ class _TranscriptWidgetState extends State<TranscriptWidget> {
                                                     ],
                                             ),
                                           ),
-                                        ),
-                                        if (data.translations.isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    ...data.translations.map((translation) => Padding(
-                                          padding: const EdgeInsets.only(top: 4),
-                                          child: Text(
-                                            _getDecodedText(translation.text),
-                                            style: TextStyle(
-                                              letterSpacing: 0.0,
-                                              color: isUser
-                                                  ? Colors.white.withValues(alpha: 0.8)
-                                                  : Colors.grey.shade300.withValues(alpha: 0.8),
-                                              fontSize: 14,
-                                              fontStyle: FontStyle.italic,
-                                              height: 1.3,
-                                            ),
-                                            textAlign: TextAlign.left,
-                                          ),
-                                        )),
-                                    const SizedBox(height: 4),
-                                    _buildTranslationNotice(),
-                                  ],
-                                  // Timestamp and provider (only shown when toggled)
-                                  if (_showSpeakerNames && (widget.canDisplaySeconds || data.sttProvider != null)) ...[
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        if (data.sttProvider != null) ...[
-                                          Text(
-                                            SttProviderConfig.getDisplayName(data.sttProvider),
-                                            style: TextStyle(
-                                              color:
-                                                  isUser ? Colors.white.withValues(alpha: 0.5) : Colors.grey.shade500,
-                                              fontSize: 10,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                          ),
-                                          if (widget.canDisplaySeconds) ...[
-                                            Text(
-                                              ' · ',
-                                              style: TextStyle(
-                                                color:
-                                                    isUser ? Colors.white.withValues(alpha: 0.5) : Colors.grey.shade500,
-                                                fontSize: 10,
-                                              ),
+                                          if (data.translations.isNotEmpty) ...[
+                                            const SizedBox(height: 8),
+                                            ...data.translations.map((translation) => Padding(
+                                                  padding: const EdgeInsets.only(top: 4),
+                                                  child: Text(
+                                                    _getDecodedText(translation.text),
+                                                    style: TextStyle(
+                                                      letterSpacing: 0.0,
+                                                      color: isUser
+                                                          ? Colors.white.withValues(alpha: 0.8)
+                                                          : Colors.grey.shade300.withValues(alpha: 0.8),
+                                                      fontSize: 14,
+                                                      fontStyle: FontStyle.italic,
+                                                      height: 1.3,
+                                                    ),
+                                                    textAlign: TextAlign.left,
+                                                  ),
+                                                )),
+                                            const SizedBox(height: 4),
+                                            _buildTranslationNotice(),
+                                          ],
+                                          // Timestamp and provider (only shown when toggled)
+                                          if (_showSpeakerNames &&
+                                              (widget.canDisplaySeconds || data.sttProvider != null)) ...[
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: [
+                                                if (data.sttProvider != null) ...[
+                                                  Text(
+                                                    SttProviderConfig.getDisplayName(data.sttProvider),
+                                                    style: TextStyle(
+                                                      color: isUser
+                                                          ? Colors.white.withValues(alpha: 0.5)
+                                                          : Colors.grey.shade500,
+                                                      fontSize: 10,
+                                                      fontStyle: FontStyle.italic,
+                                                    ),
+                                                  ),
+                                                  if (widget.canDisplaySeconds) ...[
+                                                    Text(
+                                                      ' · ',
+                                                      style: TextStyle(
+                                                        color: isUser
+                                                            ? Colors.white.withValues(alpha: 0.5)
+                                                            : Colors.grey.shade500,
+                                                        fontSize: 10,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                                if (widget.canDisplaySeconds)
+                                                  Text(
+                                                    data.getTimestampString(),
+                                                    style: TextStyle(
+                                                      color: isUser
+                                                          ? Colors.white.withValues(alpha: 0.7)
+                                                          : Colors.grey.shade400,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                           ],
                                         ],
-                                        if (widget.canDisplaySeconds)
-                                          Text(
-                                            data.getTimestampString(),
-                                            style: TextStyle(
-                                              color:
-                                                  isUser ? Colors.white.withValues(alpha: 0.7) : Colors.grey.shade400,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                      ],
+                                      ),
                                     ),
-                                ],
-                              ],
-                                  ),
-                                ),
+                            ),
                           ),
                         ),
                       ],

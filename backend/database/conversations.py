@@ -135,6 +135,27 @@ def _prepare_photo_for_read(photo_data: Optional[Dict[str, Any]], uid: str) -> O
     return data
 
 
+def _normalize_apps_results(apps_results: Any) -> list:
+    """
+    Normalize apps_results to ensure it's a valid list with required fields.
+    """
+    if isinstance(apps_results, dict):
+        apps_results = [apps_results[k] for k in sorted(apps_results.keys(), key=int)]
+
+    if not isinstance(apps_results, list):
+        return []
+
+    normalized = []
+    for item in apps_results:
+        if not isinstance(item, dict):
+            continue
+        if not item.get('app_id'):
+            continue
+        normalized.append(item)
+
+    return normalized
+
+
 @prepare_for_read(decrypt_func=_prepare_photo_for_read)
 def get_conversation_photos(uid: str, conversation_id: str):
     user_ref = db.collection('users').document(uid)
@@ -168,6 +189,13 @@ def get_conversation(uid, conversation_id):
     user_ref = db.collection('users').document(uid)
     conversation_ref = user_ref.collection(conversations_collection).document(conversation_id)
     conversation_data = conversation_ref.get().to_dict()
+    
+    # Normalize apps_results and filter out invalid entries
+    if conversation_data:
+        conversation_data['apps_results'] = _normalize_apps_results(
+            conversation_data.get('apps_results')
+        )
+    
     return conversation_data
 
 
@@ -205,6 +233,13 @@ def get_conversations(
     conversations_ref = conversations_ref.limit(limit).offset(offset)
 
     conversations = [doc.to_dict() for doc in conversations_ref.stream()]
+    
+    # Normalize apps_results and filter out invalid entries
+    for conversation in conversations:
+        conversation['apps_results'] = _normalize_apps_results(
+            conversation.get('apps_results')
+        )
+    
     return conversations
 
 
@@ -328,7 +363,8 @@ def update_conversation_overview(uid: str, conversation_id: str, overview: str):
     if not doc_snapshot.exists:
         return
 
-    update_conversation(uid, conversation_id, {'structured.overview': overview})
+    update_data = {'structured.overview': overview}
+    update_conversation(uid, conversation_id, update_data)
 
 
 def update_conversation_segment_text(uid: str, conversation_id: str, segment_id: str, text: str):
@@ -890,6 +926,10 @@ def get_public_conversations(data: List[Tuple[str, str]]):
         # get_conversation is already decorated to return a fully populated and decrypted conversation
         conversation_data = get_conversation(uid=uid, conversation_id=conversation_id)
         if conversation_data and conversation_data.get('visibility') == 'public':
+            # Normalize apps_results and filter out invalid entries
+            conversation_data['apps_results'] = _normalize_apps_results(
+                conversation_data.get('apps_results')
+            )
             conversations.append(conversation_data)
     return conversations
 

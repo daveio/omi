@@ -61,23 +61,31 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
   final FocusNode _searchFocusNode = FocusNode();
   int _currentSearchIndex = 0;
   int _totalSearchResults = 0;
-  List<int> _searchResultPositions = []; // Track positions of search results
 
   // TODO: use later for onboarding transcript segment edits
   // late AnimationController _animationController;
   // late Animation<double> _opacityAnimation;
 
+  void _closeSearch() {
+    setState(() {
+      _isSearching = false;
+      _searchQuery = '';
+      _searchController.clear();
+      _totalSearchResults = 0;
+      _currentSearchIndex = 0;
+    });
+    _searchFocusNode.unfocus();
+  }
+
   void _updateSearchResults() {
     if (_searchQuery.isEmpty) {
       _totalSearchResults = 0;
       _currentSearchIndex = 0;
-      _searchResultPositions.clear();
       return;
     }
 
     final provider = Provider.of<ConversationDetailProvider>(context, listen: false);
     int count = 0;
-    _searchResultPositions.clear();
 
     // Count matches in transcript
     if (selectedTab == ConversationTab.transcript) {
@@ -87,7 +95,6 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
         final query = _searchQuery.toLowerCase();
         int index = 0;
         while ((index = text.indexOf(query, index)) != -1) {
-          _searchResultPositions.add(count);
           count++;
           index += query.length;
         }
@@ -99,7 +106,6 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
         final query = _searchQuery.toLowerCase();
         int index = 0;
         while ((index = text.indexOf(query, index)) != -1) {
-          _searchResultPositions.add(count);
           count++;
           index += query.length;
         }
@@ -354,6 +360,8 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
 
   @override
   Widget build(BuildContext context) {
+    final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+
     return PopScope(
       canPop: true,
       child: MessageListener<ConversationDetailProvider>(
@@ -569,17 +577,24 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
                           child: IconButton(
                             padding: EdgeInsets.zero,
                             onPressed: () {
+                              final provider = context.read<ConversationDetailProvider>();
+
                               setState(() {
+                                // 1. If entering search, kill edit mode first
+                                if (!_isSearching && provider.isEditingSummary) {
+                                  provider.exitSummaryEdit();
+                                }
+
+                                // 2. Toggle search
                                 _isSearching = !_isSearching;
-                                if (!_isSearching) {
-                                  _searchQuery = '';
-                                  _searchController.clear();
-                                  _searchFocusNode.unfocus();
-                                } else {
+
+                                if (_isSearching) {
                                   _searchFocusNode.requestFocus();
                                   MixpanelManager().conversationDetailSearchClicked(
                                     conversationId: provider.conversation.id,
                                   );
+                                } else {
+                                  _closeSearch();
                                 }
                               });
                               HapticFeedback.mediumImpact();
@@ -662,11 +677,7 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
                 onTap: () {
                   // Close search if search bar is empty and user taps on content
                   if (_isSearching && _searchQuery.isEmpty) {
-                    setState(() {
-                      _isSearching = false;
-                      _searchController.clear();
-                      _searchFocusNode.unfocus();
-                    });
+                    _closeSearch();
                   }
                 },
                 child: Column(
@@ -684,11 +695,7 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
                                 currentResultIndex: getCurrentResultIndexForHighlighting(),
                                 onTapWhenSearchEmpty: () {
                                   if (_isSearching && _searchQuery.isEmpty) {
-                                    setState(() {
-                                      _isSearching = false;
-                                      _searchController.clear();
-                                      _searchFocusNode.unfocus();
-                                    });
+                                    _closeSearch();
                                   }
                                 },
                                 onMatchCountChanged: (count) {
@@ -743,12 +750,13 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
                 ),
               ),
 
-              // Floating bottom bar - hide when keyboard is visible
-              if (MediaQuery.of(context).viewInsets.bottom == 0)
-                Positioned(
-                  bottom: 32,
-                  left: 0,
-                  right: 0,
+              // Floating bottom bar - always visible, but non-interactive when keyboard is open
+              Positioned(
+                bottom: 32,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  ignoring: isKeyboardOpen,
                   child: Consumer<ConversationDetailProvider>(
                     builder: (context, provider, child) {
                       final conversation = provider.conversation;
@@ -783,6 +791,7 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
                     },
                   ),
                 ),
+              ),
 
               // thinh's comment: temporary disabled
               //// Unassigned segments notification - positioned above the bottom bar
@@ -890,142 +899,139 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> with Ti
               //),
               // Search overlay
               if (_isSearching)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          child: SafeArea(
-                            child: TextField(
-                              controller: _searchController,
-                              focusNode: _searchFocusNode,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: InputDecoration(
-                                hintText: 'Search transcript or summary...',
-                                hintStyle: TextStyle(color: Colors.grey[400]),
-                                prefixIcon: const Icon(Icons.search, color: Colors.white70),
-                                suffixIcon: _searchQuery.isNotEmpty
-                                    ? Container(
-                                        width: _searchQuery.isNotEmpty ? 150 : 40,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: [
-                                            if (_searchQuery.isNotEmpty) ...[
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.grey.withOpacity(0.3),
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                                child: Text(
-                                                  '$_currentSearchIndex/$_totalSearchResults',
-                                                  style: const TextStyle(
-                                                      color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Material(
-                                                color: Colors.transparent,
-                                                child: InkWell(
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  onTap: _totalSearchResults > 0 ? () => _navigateSearch(false) : null,
-                                                  child: Container(
-                                                    width: 28,
-                                                    height: 28,
-                                                    decoration: BoxDecoration(
-                                                      borderRadius: BorderRadius.circular(18),
-                                                    ),
-                                                    child: Icon(Icons.keyboard_arrow_up,
-                                                        color:
-                                                            _totalSearchResults > 0 ? Colors.white70 : Colors.white30,
-                                                        size: 22),
-                                                  ),
-                                                ),
-                                              ),
-                                              Material(
-                                                color: Colors.transparent,
-                                                child: InkWell(
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  onTap: _totalSearchResults > 0 ? () => _navigateSearch(true) : null,
-                                                  child: Container(
-                                                    width: 28,
-                                                    height: 28,
-                                                    decoration: BoxDecoration(
-                                                      borderRadius: BorderRadius.circular(18),
-                                                    ),
-                                                    child: Icon(Icons.keyboard_arrow_down,
-                                                        color:
-                                                            _totalSearchResults > 0 ? Colors.white70 : Colors.white30,
-                                                        size: 22),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                            ],
-                                            Material(
-                                              color: Colors.transparent,
-                                              child: InkWell(
-                                                borderRadius: BorderRadius.circular(16),
-                                                onTap: () {
-                                                  setState(() {
-                                                    _searchQuery = '';
-                                                    _searchController.clear();
-                                                    _totalSearchResults = 0;
-                                                    _currentSearchIndex = 0;
-                                                  });
-                                                },
-                                                child: Container(
-                                                  width: 28,
-                                                  height: 28,
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      _closeSearch();
+                    },
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            child: SafeArea(
+                              child: TextField(
+                                controller: _searchController,
+                                focusNode: _searchFocusNode,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: 'Search transcript or summary...',
+                                  hintStyle: TextStyle(color: Colors.grey[400]),
+                                  prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                                  suffixIcon: _searchQuery.isNotEmpty
+                                      ? Container(
+                                          width: _searchQuery.isNotEmpty ? 150 : 40,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              if (_searchQuery.isNotEmpty) ...[
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                   decoration: BoxDecoration(
-                                                    borderRadius: BorderRadius.circular(16),
+                                                    color: Colors.grey.withOpacity(0.3),
+                                                    borderRadius: BorderRadius.circular(8),
                                                   ),
-                                                  child: const Icon(Icons.clear, color: Colors.white70, size: 22),
+                                                  child: Text(
+                                                    '$_currentSearchIndex/$_totalSearchResults',
+                                                    style: const TextStyle(
+                                                        color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Material(
+                                                  color: Colors.transparent,
+                                                  child: InkWell(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    onTap: _totalSearchResults > 0 ? () => _navigateSearch(false) : null,
+                                                    child: Container(
+                                                      width: 28,
+                                                      height: 28,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(18),
+                                                      ),
+                                                      child: Icon(Icons.keyboard_arrow_up,
+                                                          color:
+                                                              _totalSearchResults > 0 ? Colors.white70 : Colors.white30,
+                                                          size: 22),
+                                                    ),
+                                                  ),
+                                                ),
+                                                Material(
+                                                  color: Colors.transparent,
+                                                  child: InkWell(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    onTap: _totalSearchResults > 0 ? () => _navigateSearch(true) : null,
+                                                    child: Container(
+                                                      width: 28,
+                                                      height: 28,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(18),
+                                                      ),
+                                                      child: Icon(Icons.keyboard_arrow_down,
+                                                          color:
+                                                              _totalSearchResults > 0 ? Colors.white70 : Colors.white30,
+                                                          size: 22),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                              ],
+                                              Material(
+                                                  color: Colors.transparent,
+                                                  child: InkWell(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    onTap: () {
+                                                      _closeSearch();
+                                                    },
+                                                    child: Container(
+                                                    width: 28,
+                                                    height: 28,
+                                                    decoration: BoxDecoration(
+                                                      borderRadius: BorderRadius.circular(16),
+                                                    ),
+                                                    child: const Icon(Icons.clear, color: Colors.white70, size: 22),
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    : null,
-                                filled: true,
-                                fillColor: const Color(0xFF1C1C1E).withOpacity(0.95),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none,
+                                            ],
+                                          ),
+                                        )
+                                      : null,
+                                  filled: true,
+                                  fillColor: const Color(0xFF1C1C1E).withOpacity(0.95),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value;
+                                    _updateSearchResults();
+                                    if (value.isNotEmpty) {
+                                      // Track search query with results
+                                      final provider = Provider.of<ConversationDetailProvider>(context, listen: false);
+                                      MixpanelManager().conversationDetailSearchQueryEntered(
+                                        conversationId: provider.conversation.id,
+                                        query: value,
+                                        resultsCount: _totalSearchResults,
+                                        activeTab: _getTabTitle(selectedTab),
+                                      );
+                                    }
+                                  });
+                                },
                               ),
-                              onChanged: (value) {
-                                setState(() {
-                                  _searchQuery = value;
-                                  _updateSearchResults();
-                                  if (value.isNotEmpty) {
-                                    // Track search query with results
-                                    final provider = Provider.of<ConversationDetailProvider>(context, listen: false);
-                                    MixpanelManager().conversationDetailSearchQueryEntered(
-                                      conversationId: provider.conversation.id,
-                                      query: value,
-                                      resultsCount: _totalSearchResults,
-                                      activeTab: _getTabTitle(selectedTab),
-                                    );
-                                  }
-                                });
-                              },
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
             ],
@@ -1052,48 +1058,58 @@ class SummaryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-        onPointerDown: (PointerDownEvent event) {
-          FocusScope.of(context).unfocus();
-          if (searchQuery.isEmpty && onTapWhenSearchEmpty != null) {
-            onTapWhenSearchEmpty!();
-          }
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            // If search is empty, call the callback to close search
-            if (searchQuery.isEmpty && onTapWhenSearchEmpty != null) {
-              onTapWhenSearchEmpty!();
-            }
-          },
-          child: Selector<ConversationDetailProvider, Tuple3<bool, bool, Function(int)>>(
-            selector: (context, provider) =>
-                Tuple3(provider.conversation.discarded, provider.showRatingUI, provider.setConversationRating),
-            builder: (context, data, child) {
-              return Stack(
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        final provider = context.read<ConversationDetailProvider>();
+        if (provider.isEditingSummary) {
+          provider.exitSummaryEdit();
+          return;
+        }
+
+        final isEditing = !FocusScope.of(context).hasPrimaryFocus;
+        FocusScope.of(context).unfocus();
+        // If search is empty and not editing, call the callback to close search
+        if (!isEditing && searchQuery.isEmpty && onTapWhenSearchEmpty != null) {
+          onTapWhenSearchEmpty!();
+        }
+      },
+      onDoubleTap: () {
+        final provider = context.read<ConversationDetailProvider>();
+        final pageState = context.findAncestorStateOfType<_ConversationDetailPageState>();
+
+        // 1. Close search if open
+        pageState?._closeSearch();
+
+        // 2. Enter edit mode
+        provider.enterSummaryEdit();
+      },
+      child: Selector<ConversationDetailProvider, Tuple3<bool, bool, Function(int)>>(
+        selector: (context, provider) =>
+            Tuple3(provider.conversation.discarded, provider.showRatingUI, provider.setConversationRating),
+        builder: (context, data, child) {
+          return Stack(
+            children: [
+              ListView(
+                shrinkWrap: true,
                 children: [
-                  ListView(
-                    shrinkWrap: true,
-                    children: [
-                      const GetSummaryWidgets(),
-                      data.item1
-                          ? const ReprocessDiscardedWidget()
-                          : GetAppsWidgets(
-                              searchQuery: searchQuery,
-                              currentResultIndex: currentResultIndex,
-                              onMatchCountChanged: onMatchCountChanged,
-                            ),
-                      const GetGeolocationWidgets(),
-                      const SizedBox(height: 150),
-                    ],
-                  ),
+                  const GetSummaryWidgets(),
+                  data.item1
+                      ? const ReprocessDiscardedWidget()
+                      : GetAppsWidgets(
+                          searchQuery: searchQuery,
+                          currentResultIndex: currentResultIndex,
+                          onMatchCountChanged: onMatchCountChanged,
+                        ),
+                  const GetGeolocationWidgets(),
+                  const SizedBox(height: 150),
                 ],
-              );
-            },
-          ),
-        ));
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -1113,28 +1129,24 @@ class TranscriptWidgets extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-        onPointerDown: (PointerDownEvent event) {
-          FocusScope.of(context).unfocus();
-          if (searchQuery.isEmpty && onTapWhenSearchEmpty != null) {
-            onTapWhenSearchEmpty!();
-          }
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            if (searchQuery.isEmpty && onTapWhenSearchEmpty != null) {
-              onTapWhenSearchEmpty!();
-            }
-          },
-          child: Consumer<ConversationDetailProvider>(
-            builder: (context, provider, child) {
-              final conversation = provider.conversation;
-              final segments = conversation.transcriptSegments;
-              final photos = conversation.photos;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        if (searchQuery.isEmpty && onTapWhenSearchEmpty != null) {
+          onTapWhenSearchEmpty!();
+        }
+      },
+      onDoubleTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Consumer<ConversationDetailProvider>(
+        builder: (context, provider, child) {
+          final conversation = provider.conversation;
+          final segments = conversation.transcriptSegments;
+          final photos = conversation.photos;
 
-              if (segments.isEmpty && photos.isEmpty) {
+          if (segments.isEmpty && photos.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.only(top: 32),
                   child: ExpandableTextWidget(
@@ -1224,7 +1236,7 @@ class TranscriptWidgets extends StatelessWidget {
               );
             },
           ),
-        ));
+        );
   }
 }
 

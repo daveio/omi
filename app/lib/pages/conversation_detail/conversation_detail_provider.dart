@@ -97,6 +97,40 @@ class ConversationDetailProvider extends ChangeNotifier with MessageNotifierMixi
 
   bool showUnassignedFloatingButton = true;
 
+  bool isEditingSummary = false;
+
+  void enterSummaryEdit() {
+    isEditingSummary = true;
+    overviewFocusNode?.requestFocus();
+    notifyListeners();
+  }
+
+  void exitSummaryEdit() {
+    isEditingSummary = false;
+    overviewFocusNode?.unfocus();
+    notifyListeners();
+  }
+
+  void toggleSummaryEdit() {
+    if (isEditingSummary) {
+      exitSummaryEdit();
+    } else {
+      enterSummaryEdit();
+    }
+  }
+
+  String? editingSegmentId;
+
+  void enterSegmentEdit(String segmentId) {
+    editingSegmentId = segmentId;
+    notifyListeners();
+  }
+
+  void exitSegmentEdit() {
+    editingSegmentId = null;
+    notifyListeners();
+  }
+
   void toggleEditSegmentLoading(bool value) {
     editSegmentLoading = value;
     notifyListeners();
@@ -231,6 +265,7 @@ class ConversationDetailProvider extends ChangeNotifier with MessageNotifierMixi
     _ratingTimer?.cancel();
     showRatingUI = false;
     hasConversationSummaryRatingSet = false;
+    isEditingSummary = false;
 
     titleController = TextEditingController();
     titleFocusNode = FocusNode();
@@ -261,6 +296,10 @@ class ConversationDetailProvider extends ChangeNotifier with MessageNotifierMixi
 
       overviewFocusNode!.addListener(() {
         if (!overviewFocusNode!.hasFocus) {
+          if (isEditingSummary) {
+            exitSummaryEdit();
+          }
+
           final newOverview = overviewController!.text;
           if (lastSavedOverview != newOverview) {
             // Update both the structured overview and the app result content
