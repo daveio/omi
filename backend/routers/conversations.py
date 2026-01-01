@@ -16,6 +16,7 @@ from models.conversation import (
     ConversationStatus,
     ConversationVisibility,
     CreateConversationResponse,
+    Geolocation,
     MergeConversationsRequest,
     MergeConversationsResponse,
     SetConversationEventsStateRequest,
@@ -32,9 +33,11 @@ from models.other import Person
 from utils.conversations.process_conversation import process_conversation, retrieve_in_progress_conversation
 from utils.conversations.search import search_conversations
 from utils.llm.conversation_processing import generate_summary_with_prompt
+from utils.speaker_identification import extract_speaker_samples
 from utils.other import endpoints as auth
 from utils.other.storage import get_conversation_recording_if_exists
 from utils.app_integrations import trigger_external_integrations
+from utils.conversations.location import get_google_maps_location
 
 router = APIRouter()
 
@@ -70,6 +73,12 @@ def process_in_progress_conversation(
         if not conversation.external_data:
             conversation.external_data = {}
         conversation.external_data['calendar_meeting_context'] = request.calendar_meeting_context.dict()
+
+    # Geolocation
+    geolocation = redis_db.get_cached_user_geolocation(uid)
+    if geolocation:
+        geolocation = Geolocation(**geolocation)
+        conversation.geolocation = get_google_maps_location(geolocation.latitude, geolocation.longitude)
 
     conversations_db.update_conversation_status(uid, conversation.id, ConversationStatus.processing)
     conversation = process_conversation(uid, conversation.language, conversation, force_process=True)
@@ -541,6 +550,7 @@ def set_assignee_conversation_segment(
 def assign_segments_bulk(
     conversation_id: str,
     data: BulkAssignSegmentsRequest,
+    background_tasks: BackgroundTasks,
     uid: str = Depends(auth.get_current_user_uid),
 ):
     conversation = _get_valid_conversation_by_id(uid, conversation_id)
@@ -567,6 +577,17 @@ def assign_segments_bulk(
     conversations_db.update_conversation_segments(
         uid, conversation_id, [segment.dict() for segment in conversation.transcript_segments]
     )
+
+    # Trigger speaker sample extraction when assigning to a person
+    if data.assign_type == 'person_id' and value:
+        background_tasks.add_task(
+            extract_speaker_samples,
+            uid=uid,
+            person_id=value,
+            conversation_id=conversation_id,
+            segment_ids=data.segment_ids,
+        )
+
     return conversation
 
 
