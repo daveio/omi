@@ -1,18 +1,15 @@
 # https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github
-have_fun: false
+
+have_fun: true
+memory_config:
+  disabled: false
 code_review:
-  comment_severity_threshold: HIGH
+  disable: false
+  comment_severity_threshold: MEDIUM
+  max_review_comments: -1
   pull_request_opened:
-    help: false
-    summary: false
+    help: true
+    summary: true
     code_review: true
     include_drafts: true
 ignore_patterns: []
-
-review_preferences:
-  minimum_severity: "high"
-  include_code_suggestions: true
-  focus_areas:
-    - "correctness"
-    - "security"
-  # style_guide_path: ".gemini/my_custom_style_guide.md"
